@@ -1,0 +1,17 @@
+[package]
+name = "vara_orthanc"
+version = "0.1.0"
+edition = "2021"
+authors = ["Narendra Joshi <narendra.joshi@vara.ai"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+
+[dependencies]
+
+
+[build-dependencies]
+bindgen = "0.64.0"
