@@ -8,6 +8,7 @@ fn main() {
     let bindings = bindgen::builder()
         .header("resources/OrthancCPlugin_1_11_3.h")
         .allowlist_type("Orthanc.*")
+        .allowlist_type("_Orthanc.*")
         .allowlist_var("Orthanc.*")
         .allowlist_function("Orthanc.*")
         .generate()
