@@ -18,24 +18,30 @@ use serde_json::Value as JsonValue;
 
 use libc::{c_char, c_void};
 use std::vec::Vec;
+use std::env;
 use std::ffi::CString;
+
 
 struct OrthancContext(*mut OrthancPluginContext);
 unsafe impl Send for OrthancContext {}
 unsafe impl Sync for OrthancContext {}
 
+
 static mut orthanc_context: Option<OrthancContext> = None;
+
 
 #[repr(C)]
 struct OnWorklistParams {
     callback: orthanc::OrthancPluginWorklistCallback
 }
 
+
 #[repr(C)]
 struct CreateMemoryBufferParams {
     target: *mut orthanc::OrthancPluginMemoryBuffer,
     size: usize
 }
+
 
 #[repr(C)]
 struct CreateDicomParams {
@@ -45,6 +51,24 @@ struct CreateDicomParams {
     flags: orthanc::OrthancPluginCreateDicomFlags,
     private_creator: *const c_char
 }
+
+
+#[repr(C)]
+struct QueryWorklistOperationParams {
+    query: *const OrthancPluginWorklistQuery,
+    dicom: *const c_void,
+    size: u32,
+    is_match: *mut i32,
+    target: *mut orthanc::OrthancPluginMemoryBuffer
+}
+
+#[repr(C)]
+struct CreateFindMatcherParams {
+    target: *mut *mut orthanc::OrthancPluginFindMatcher,
+    query: *mut c_void,
+    size: u32
+}
+
 
 #[no_mangle]
 pub unsafe extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) -> i32 {
@@ -70,20 +94,24 @@ pub unsafe extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginCont
     return 0;
 }
 
+
 #[no_mangle]
 pub extern "C" fn OrthancPluginFinalize() {
     println!("Vara Ortahnc Worklist plugin finalized.");
 }
+
 
 #[no_mangle]
 pub extern "C" fn OrthancPluginGetName() -> *const u8 {
     "Vara Orthanc\0".as_ptr()
 }
 
+
 #[no_mangle]
 pub extern "C" fn OrthancPluginGetVersion() -> *const u8 {
     "0.1.0\0".as_ptr()
 }
+
 
 unsafe extern "C" fn on_worklist_callback(
     answers: *mut OrthancPluginWorklistAnswers,
@@ -95,9 +123,12 @@ unsafe extern "C" fn on_worklist_callback(
     let context = orthanc_context.as_ref().unwrap().0;
     let invoker = (*context).InvokeService.unwrap();
 
-    // -- HTTP
+    // -- HTTP request to fetch Modality worklist from a peer
+    //
+    let (ae_title, ae_host, ae_port) = remote_application_entity();
+
     let worklist_items: Vec<JsonValue> =
-        match orthanc_modality_worklist("orthanc", "127.0.0.1", 8042).unwrap() {
+        match orthanc_modality_worklist(&ae_title, &ae_host, ae_port).unwrap() {
             JsonValue::Array(v) => v,
             _ => return 1
         };
@@ -143,6 +174,45 @@ unsafe extern "C" fn on_worklist_callback(
             println!("Failed to create a DICOM from JSON text: {:?}", json_cstr);
             return 1;
         }
+
+        // TODO:
+        // Check if `item` matches the worklist query.  Create a FindMatcher and
+        // use to check if query matches item or not.
+        // _OrthancPluginService_CreateFindMatcher
+        //
+
+        let mut query_buffer = orthanc::OrthancPluginMemoryBuffer {
+            data: std::ptr::null::<c_void>() as *mut c_void,
+            size: 0
+        };
+        let query_params  = QueryWorklistOperationParams {
+            query,
+            dicom: std::ptr::null(),
+            size: 0,
+            is_match: std::ptr::null_mut(),
+            target: Box::into_raw(Box::new(&query_buffer)) as *mut orthanc::OrthancPluginMemoryBuffer
+        };
+
+        invoker(
+            context,
+            orthanc::_OrthancPluginService__OrthancPluginService_WorklistGetDicomQuery,
+            Box::into_raw(Box::new(&query_params)) as *mut c_void
+        );
+
+        let mut find_matcher: *mut orthanc::OrthancPluginFindMatcher = std::ptr::null_mut();
+        let params = CreateFindMatcherParams {
+            query: query as *mut c_void,
+            size: query_params.size,
+            target: Box::into_raw(Box::new(&mut find_matcher)) as *mut *mut orthanc::OrthancPluginFindMatcher
+        };
+
+        invoker(
+            context,
+            orthanc::_OrthancPluginService__OrthancPluginService_CreateFindMatcher,
+            Box::into_raw(Box::new(params)) as *mut c_void
+        );
+
+        println!("Matcher obtained: {:?}", *find_matcher);
 
         let params = Box::new(orthanc::_OrthancPluginWorklistAnswersOperation {
             answers,
@@ -200,6 +270,46 @@ fn orthanc_modality_worklist(
     let json_response = workitems.text().unwrap();
     Ok(serde_json::from_str(&json_response)?)
 }
+
+
+fn remote_application_entity() -> (String, String, u32) {
+    let default_value = (String::from("orthanc"), String::from("localhost"), 4244);
+    let ae_title;
+    let ae_host;
+    let ae_port;
+
+
+    match env::var("VARA_ORTHANC_AE_TITLE") {
+        Ok(ae_title_) => {
+            ae_title = ae_title_;
+        },
+        Err(_) => {
+            return default_value;
+        }
+    };
+
+    match env::var("VARA_ORTHANC_AE_HOST") {
+        Ok(ae_host_) => {
+            ae_host = ae_host_;
+        },
+        Err(_) => {
+            return default_value;
+        }
+    };
+
+    match env::var("VARA_ORTHANC_AE_PORT") {
+        Ok(ae_port_) => {
+            ae_port = ae_port_;
+        },
+        Err(_) => {
+            return default_value;
+        }
+    };
+
+    (ae_title, ae_host, ae_port.parse().unwrap())
+}
+
+
 
 #[cfg(test)]
 mod test {
