@@ -7,6 +7,7 @@ extern crate serde_json;
 extern crate tracing;
 
 pub mod orthanc;
+pub mod cache;
 
 use crate::orthanc::OrthancPluginContext;
 use crate::orthanc::OrthancPluginErrorCode;
@@ -21,6 +22,7 @@ use libc::{c_char, c_void};
 use std::env;
 use std::ffi::CString;
 use std::vec::Vec;
+use std::path::Path;
 
 struct OrthancContext(*mut OrthancPluginContext);
 unsafe impl Send for OrthancContext {}
@@ -99,13 +101,23 @@ fn orthanc_modality_worklist(
         "http://{}:{}/modalities/{}/find-worklist",
         host, port, ae_title
     );
+
     let http_client = reqwest::blocking::Client::new();
     //
     //  Sample JSON payload that works:
-    //
-    //  {"0008,0005" : "ISO_IR 100",
-    //   "0008,0050" : "1",
-    //   "0010,0010" : "^Test Party"}
+    // {
+    //     "0008,0005": "ISO_IR 100",
+    //     "0008,0050": "1",
+    //     "0010,0010": "^Test Party",
+    //     "0040,0100": [
+    //         {
+    //             "0008,0060": "test",
+    //             "0010,0010": "^Test Party",
+    //             "0040,0002": "39230313"
+    //         }
+    //     ],
+    //     "0040,1001": "1"
+    // }
     //
     // Note that
     // https://dicom.nema.org/dicom/2013/output/chtml/part18/sect_F.2.html is
@@ -122,10 +134,17 @@ fn orthanc_modality_worklist(
                             "StudyInstanceUID": null}}"#,
         )
         .basic_auth("admin", Some("password"))
-        .send()
-        .unwrap();
+        .send();
 
-    let json_response = workitems.text().expect("Failed to fetch worklist from Orthanc API.");
+    let cache_file = Path::new("vara_orthanc.json");
+
+    let json_response = if workitems.is_err() || !workitems.as_ref().unwrap().status().is_success()  {
+        println!("Reading the cache file for MWL entries.");
+        cache::read(&cache_file).expect("Failed to read cache file.")
+    } else {
+        workitems?.text().unwrap()
+    };
+    cache::write(&json_response, &cache_file)?;
     Ok(serde_json::from_str(&json_response)?)
 }
 
