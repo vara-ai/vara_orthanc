@@ -11,7 +11,6 @@ pub mod orthanc;
 use crate::orthanc::OrthancPluginContext;
 use crate::orthanc::OrthancPluginErrorCode;
 use crate::orthanc::OrthancPluginErrorCode_OrthancPluginErrorCode_Success as OrthancCodeSuccess;
-use crate::orthanc::OrthancPluginFindMatcher;
 use crate::orthanc::OrthancPluginMemoryBuffer;
 use crate::orthanc::OrthancPluginWorklistAnswers;
 use crate::orthanc::OrthancPluginWorklistQuery;
@@ -116,6 +115,8 @@ fn orthanc_modality_worklist(
         .body(
             r#"{"Short": true,
                   "Query": {"AccessionNumber": "*",
+                            "RequestedProcedureID": null,
+                            "ScheduledProcedureStepSequence": [],
                             "PatientName": null,
                             "StudyID": null,
                             "StudyInstanceUID": null}}"#,
@@ -123,7 +124,8 @@ fn orthanc_modality_worklist(
         .basic_auth("admin", Some("password"))
         .send()
         .unwrap();
-    let json_response = workitems.text().unwrap();
+
+    let json_response = workitems.text().expect("Failed to fetch worklist from Orthanc API.");
     Ok(serde_json::from_str(&json_response)?)
 }
 
