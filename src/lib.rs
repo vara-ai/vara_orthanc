@@ -11,6 +11,7 @@ pub mod orthanc;
 use crate::orthanc::OrthancPluginContext;
 use crate::orthanc::OrthancPluginErrorCode;
 use crate::orthanc::OrthancPluginErrorCode_OrthancPluginErrorCode_Success as OrthancCodeSuccess;
+use crate::orthanc::OrthancPluginFindMatcher;
 use crate::orthanc::OrthancPluginMemoryBuffer;
 use crate::orthanc::OrthancPluginWorklistAnswers;
 use crate::orthanc::OrthancPluginWorklistQuery;
@@ -67,20 +68,26 @@ unsafe extern "C" fn on_worklist_callback(
                 return 1;
             }
         };
-    println!("Worklist items #2: {:?}", &worklist_items);
+    println!("Worklist items #3: {:?}", &worklist_items);
+
     for item in worklist_items {
         let buffer_size = 1000;
-        let buffer = create_memory_buffer(buffer_size);
+        let worklist_item_buffer = create_memory_buffer(buffer_size);
+
         println!("Worklist item from Orthanc: {}", &item);
-        create_dicom(item.to_string(), buffer);
-        add_worklist_query_answer(answers, query, buffer);
-        free_buffer(buffer);
+
+        create_dicom(item.to_string(), worklist_item_buffer);
+
+        if dicom_matches_query(query, worklist_item_buffer) {
+            add_worklist_query_answer(answers, query, worklist_item_buffer)
+        };
+
+        free_buffer(worklist_item_buffer);
         println!(
             "Added one answer to the C-FIND query results. {:?}",
             item.to_string()
         );
     }
-
     return OrthancCodeSuccess;
 }
 
@@ -94,7 +101,6 @@ fn orthanc_modality_worklist(
         host, port, ae_title
     );
     let http_client = reqwest::blocking::Client::new();
-
     //
     //  Sample JSON payload that works:
     //
@@ -143,13 +149,12 @@ unsafe fn register_on_worklist_callback(
     invoker(
         context,
         orthanc::_OrthancPluginService__OrthancPluginService_RegisterWorklistCallback,
-        Box::into_raw(params) as *mut c_void
+        Box::into_raw(params) as *mut c_void,
     );
 }
 
-
 fn peer_orthanc() -> (String, String, u32) {
-    let default_value = (String::from("orthanc"), String::from("orthanc"), 8042);
+    let default_value = (String::from("orthanc"), String::from("localhost"), 8042);
     let ae_title;
     let ae_host;
     let ae_port;
@@ -247,42 +252,38 @@ unsafe fn create_dicom(dicom_json: String, target_buffer: *mut OrthancPluginMemo
     )
 }
 
-unsafe fn get_dicom_query(
+unsafe fn dicom_matches_query(
     query: *const OrthancPluginWorklistQuery,
-) -> *mut OrthancPluginMemoryBuffer {
-
+    dicom: *const OrthancPluginMemoryBuffer,
+) -> bool {
     #[repr(C)]
     struct QueryWorklistOperationParams {
         query: *const OrthancPluginWorklistQuery,
         dicom: *const c_void,
         size: u32,
         is_match: *mut i32,
-        target: *mut orthanc::OrthancPluginMemoryBuffer
+        target: *mut orthanc::OrthancPluginMemoryBuffer,
     }
 
     let context = orthanc_context.as_ref().unwrap().0;
     let invoker = (*context).InvokeService.unwrap();
-    let query_buffer = OrthancPluginMemoryBuffer {
-        data: std::ptr::null::<c_void>() as *mut c_void,
-        size: 0,
-    };
-    let query_buffer_ptr = Box::into_raw(Box::new(query_buffer));
+    let is_match: i32 = 0;
 
-    let query_params = QueryWorklistOperationParams {
+    let params_ptr = Box::into_raw(Box::new(QueryWorklistOperationParams {
         query,
-        dicom: std::ptr::null(),
-        size: 0,
-        is_match: std::ptr::null_mut(),
-        target: Box::into_raw(Box::new(&query_buffer)) as *mut OrthancPluginMemoryBuffer,
-    };
+        dicom: (*dicom).data,
+        size: (*dicom).size,
+        is_match: Box::into_raw(Box::new(is_match)),
+        target: std::ptr::null_mut(),
+    }));
 
     invoker(
         context,
-        orthanc::_OrthancPluginService__OrthancPluginService_WorklistGetDicomQuery,
-        Box::into_raw(Box::new(&query_params)) as *mut c_void,
+        orthanc::_OrthancPluginService__OrthancPluginService_WorklistIsMatch,
+        params_ptr as *mut c_void,
     );
 
-    query_buffer_ptr
+    (*(*Box::from_raw(params_ptr)).is_match) != 0
 }
 
 unsafe fn add_worklist_query_answer(
