@@ -135,7 +135,7 @@ unsafe fn orthanc_modality_worklist(
     let cache_file = Path::new("vara_orthanc.json");
     let json_response = if workitems.is_err() || !workitems.as_ref().unwrap().status().is_success()
     {
-        info("Reading the cache file for MWL entries.");
+        info(&format!("Reading the cache file for MWL entries. Failure: {:?}", workitems));
         match cache::read(&cache_file) {
             Ok(contents) => contents,
             Err(error) => {
@@ -179,7 +179,9 @@ unsafe fn register_on_worklist_callback(
 // want to communicate with.
 //
 fn peer_orthanc() -> (String, String, u32) {
-    let default_value = (String::from("orthanc"), String::from("localhost"), 8042);
+    // By default, we send an API request to the same Orthanc instance that
+    // loads this plugin.
+    let default_value = (String::from("orthanc"), String::from("localhost"), 9042);
     let ae_title;
     let api_host;
     let api_port;

@@ -1,0 +1,19 @@
+---
+
+version: "3.7"
+
+services:
+  proxy-orthanc:
+    image: eu.gcr.io/mx-healthcare-product-dev/orthanc:${MXH_IMAGE_TAG:-latest}
+    command: "--trace /config/config.json"
+    # build: orthanc/
+    # For reasons I don't yet understand, IP of the docker bridge interface
+    # doesn't work.
+    network_mode: host
+    extra_hosts:
+      - "host.docker.internal:${DOCKER_HOST_GATEWAY}"
+    environment:
+      - RUST_BACKTRACE=1
+    volumes:
+      - "./config.json:/config/config.json"
+      - "../target/debug/libvara_orthanc.so:/usr/local/share/orthanc/plugins/libVaraOrthanc.so"
