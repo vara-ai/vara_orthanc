@@ -68,9 +68,9 @@ unsafe extern "C" fn on_worklist_callback(
     _issuerAet: *const c_char,
     _calledAet: *const c_char,
 ) -> OrthancPluginErrorCode {
-    let (ae_title, ae_host, ae_port) = peer_orthanc();
+    let (ae_title, api_host, api_port) = peer_orthanc();
     let worklist_items: Vec<JsonValue> =
-        match orthanc_modality_worklist(&ae_title, &ae_host, ae_port) {
+        match orthanc_modality_worklist(&ae_title, &api_host, api_port) {
             Ok(JsonValue::Array(v)) => v,
             _ => {
                 error("Failed to fetch modality worklist from peer Orthanc");
@@ -181,8 +181,8 @@ unsafe fn register_on_worklist_callback(
 fn peer_orthanc() -> (String, String, u32) {
     let default_value = (String::from("orthanc"), String::from("localhost"), 8042);
     let ae_title;
-    let ae_host;
-    let ae_port;
+    let api_host;
+    let api_port;
 
     match env::var("VARA_ORTHANC_AE_TITLE") {
         Ok(ae_title_) => {
@@ -194,8 +194,8 @@ fn peer_orthanc() -> (String, String, u32) {
     };
 
     match env::var("VARA_ORTHANC_AE_HOST") {
-        Ok(ae_host_) => {
-            ae_host = ae_host_;
+        Ok(api_host_) => {
+            api_host = api_host_;
         }
         Err(_) => {
             return default_value;
@@ -203,15 +203,15 @@ fn peer_orthanc() -> (String, String, u32) {
     };
 
     match env::var("VARA_ORTHANC_AE_PORT") {
-        Ok(ae_port_) => {
-            ae_port = ae_port_;
+        Ok(api_port_) => {
+            api_port = api_port_;
         }
         Err(_) => {
             return default_value;
         }
     };
 
-    (ae_title, ae_host, ae_port.parse().unwrap())
+    (ae_title, api_host, api_port.parse().unwrap())
 }
 
 //
