@@ -118,6 +118,10 @@ unsafe fn orthanc_modality_worklist(
     // Note that
     // https://dicom.nema.org/dicom/2013/output/chtml/part18/sect_F.2.html is
     // considered invalid JSON by the Orthanc core parser.
+    let orthanc_api_user = env::var("VARA_ORTHANC_API_USER").unwrap_or(String::from("admin"));
+    let orthanc_api_password =
+        env::var("VARA_ORTHANC_API_PASSWORD").unwrap_or(String::from("password"));
+
     let workitems = http_client
         .post(url)
         .body(
@@ -129,13 +133,16 @@ unsafe fn orthanc_modality_worklist(
                             "StudyID": null,
                             "StudyInstanceUID": null}}"#,
         )
-        .basic_auth("admin", Some("password"))
+        .basic_auth(orthanc_api_user, Some(orthanc_api_password))
         .send();
 
     let cache_file = Path::new("vara_orthanc.json");
     let json_response = if workitems.is_err() || !workitems.as_ref().unwrap().status().is_success()
     {
-        info(&format!("Reading the cache file for MWL entries. Failure: {:?}", workitems));
+        info(&format!(
+            "Reading the cache file for MWL entries. Failure: {:?}",
+            workitems
+        ));
         match cache::read(&cache_file) {
             Ok(contents) => contents,
             Err(error) => {

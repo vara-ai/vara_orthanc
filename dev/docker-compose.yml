@@ -17,6 +17,8 @@ services:
       - VARA_ORTHANC_AE_TITLE=orthanc
       - VARA_ORTHANC_API_HOST=localhost
       - VARA_ORTHANC_API_PORT=9042
+      - VARA_ORTHANC_API_USER=admin
+      - VARA_ORTHANC_API_PASSWORD=password
     volumes:
       - "./config.json:/config/config.json"
       - "../target/debug/libvara_orthanc.so:/usr/local/share/orthanc/plugins/libVaraOrthanc.so"
