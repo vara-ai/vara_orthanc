@@ -70,8 +70,8 @@ unsafe extern "C" fn on_worklist_callback(
 ) -> OrthancPluginErrorCode {
     let (ae_title, ae_host, ae_port) = peer_orthanc();
     let worklist_items: Vec<JsonValue> =
-        match orthanc_modality_worklist(&ae_title, &ae_host, ae_port).unwrap() {
-            JsonValue::Array(v) => v,
+        match orthanc_modality_worklist(&ae_title, &ae_host, ae_port) {
+            Ok(JsonValue::Array(v)) => v,
             _ => {
                 error("Failed to fetch modality worklist from peer Orthanc");
                 return 1;
@@ -138,9 +138,9 @@ unsafe fn orthanc_modality_worklist(
         info("Reading the cache file for MWL entries.");
         match cache::read(&cache_file) {
             Ok(contents) => contents,
-            Err(_failure) => {
+            Err(error) => {
                 warning("Failed to read cache file");
-                String::from("")
+                return Err(Box::new(error));
             }
         }
     } else {
