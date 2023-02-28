@@ -178,7 +178,7 @@ unsafe fn register_on_worklist_callback(
 // Returns a tuple with (ae_title, ae_host, ae_port) of the Orthanc peer that we
 // want to communicate with.
 //
-fn peer_orthanc() -> (String, String, u32) {
+unsafe fn peer_orthanc() -> (String, String, u32) {
     // By default, we send an API request to the same Orthanc instance that
     // loads this plugin.
     let default_value = (String::from("orthanc"), String::from("localhost"), 9042);
@@ -190,25 +190,28 @@ fn peer_orthanc() -> (String, String, u32) {
         Ok(ae_title_) => {
             ae_title = ae_title_;
         }
-        Err(_) => {
+        error @ Err(_) => {
+            warning(&format!("VARA_ORTHANC_AE_TITLE not defined: {:?}", error));
             return default_value;
         }
     };
 
-    match env::var("VARA_ORTHANC_AE_HOST") {
+    match env::var("VARA_ORTHANC_API_HOST") {
         Ok(api_host_) => {
             api_host = api_host_;
         }
-        Err(_) => {
+        error @ Err(_) => {
+            warning(&format!("VARA_ORTHANC_API_HOST not defined: {:?}", error));
             return default_value;
         }
     };
 
-    match env::var("VARA_ORTHANC_AE_PORT") {
+    match env::var("VARA_ORTHANC_API_PORT") {
         Ok(api_port_) => {
             api_port = api_port_;
         }
-        Err(_) => {
+        error @ Err(_) => {
+            warning(&format!("VARA_ORTHANC_API_PORT not defined: {:?}", error));
             return default_value;
         }
     };

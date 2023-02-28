@@ -14,6 +14,9 @@ services:
       - "host.docker.internal:${DOCKER_HOST_GATEWAY}"
     environment:
       - RUST_BACKTRACE=1
+      - VARA_ORTHANC_AE_TITLE=orthanc
+      - VARA_ORTHANC_API_HOST=localhost
+      - VARA_ORTHANC_API_PORT=9042
     volumes:
       - "./config.json:/config/config.json"
       - "../target/debug/libvara_orthanc.so:/usr/local/share/orthanc/plugins/libVaraOrthanc.so"
