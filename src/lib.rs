@@ -78,12 +78,13 @@ unsafe extern "C" fn on_worklist_callback(
             }
         };
     for item in worklist_items {
-        let worklist_item_buffer = memory_buffer();
-        create_dicom(item.to_string(), worklist_item_buffer);
-        if dicom_matches_query(query, worklist_item_buffer) {
-            add_worklist_query_answer(answers, query, worklist_item_buffer)
+        let mut buffer = memory_buffer();
+        let buffer_ptr = &mut buffer as *mut OrthancPluginMemoryBuffer;
+        create_dicom(item.to_string(), buffer_ptr);
+        if dicom_matches_query(query, buffer_ptr) {
+            add_worklist_query_answer(answers, query, buffer_ptr)
         };
-        free_buffer(worklist_item_buffer);
+        free_buffer(buffer_ptr);
     }
     return OrthancCodeSuccess;
 }
@@ -171,13 +172,13 @@ unsafe fn register_on_worklist_callback(
     struct OnWorklistParams {
         callback: orthanc::OrthancPluginWorklistCallback,
     }
-    let params = Box::new(OnWorklistParams {
+    let mut params = OnWorklistParams {
         callback: Some(callback),
-    });
+    };
 
     invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_RegisterWorklistCallback,
-        Box::into_raw(params) as *mut c_void,
+        &mut params as *mut OnWorklistParams as *mut c_void,
     );
 }
 
@@ -230,12 +231,12 @@ unsafe fn peer_orthanc() -> (String, String, u32) {
 // Returns a pointer to an OrthancPluginMemoryBuffer that can be used later by
 // Orthanc core to provide or receive data. The buffer is empty and no memory is
 // requested from Orthanc core.
-unsafe fn memory_buffer() -> *mut OrthancPluginMemoryBuffer {
+unsafe fn memory_buffer() -> OrthancPluginMemoryBuffer {
     let buffer = OrthancPluginMemoryBuffer {
         data: std::ptr::null::<c_void>() as *mut c_void,
         size: 0,
     };
-    Box::into_raw(Box::new(buffer))
+    buffer
 }
 
 unsafe fn create_dicom(dicom_json: String, target_buffer: *mut OrthancPluginMemoryBuffer) -> i32 {
@@ -250,17 +251,17 @@ unsafe fn create_dicom(dicom_json: String, target_buffer: *mut OrthancPluginMemo
 
     let json_cstr = CString::new(dicom_json).unwrap();
     let private_creator = CString::new("vara").unwrap();
-    let params = Box::new(CreateDicomParams {
+    let mut params = CreateDicomParams {
         target: target_buffer,
         json: json_cstr.as_ptr(),
         pixel_data: std::ptr::null(),
         flags: orthanc::OrthancPluginCreateDicomFlags_OrthancPluginCreateDicomFlags_None,
         private_creator: private_creator.as_ptr() as *const c_char,
-    });
+    };
 
     invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_CreateDicom2,
-        Box::into_raw(params) as *mut c_void,
+        &mut params as *mut CreateDicomParams as *mut c_void,
     )
 }
 
@@ -277,21 +278,21 @@ unsafe fn dicom_matches_query(
         target: *mut orthanc::OrthancPluginMemoryBuffer,
     }
 
-    let is_match: i32 = 0;
-    let params_ptr = Box::into_raw(Box::new(QueryWorklistOperationParams {
+    let mut is_match: i32 = 0;
+    let mut params = QueryWorklistOperationParams {
         query,
         dicom: (*dicom).data,
         size: (*dicom).size,
-        is_match: Box::into_raw(Box::new(is_match)),
+        is_match: &mut is_match as *mut i32,
         target: std::ptr::null_mut(),
-    }));
+    };
 
     invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_WorklistIsMatch,
-        params_ptr as *mut c_void,
+        &mut params as *mut QueryWorklistOperationParams as *mut c_void,
     );
 
-    (*(*Box::from_raw(params_ptr)).is_match) != 0
+    (*params.is_match) != 0
 }
 
 unsafe fn add_worklist_query_answer(
@@ -299,15 +300,15 @@ unsafe fn add_worklist_query_answer(
     query: *const OrthancPluginWorklistQuery,
     answer: *const OrthancPluginMemoryBuffer,
 ) {
-    let params = Box::new(orthanc::_OrthancPluginWorklistAnswersOperation {
+    let mut params = orthanc::_OrthancPluginWorklistAnswersOperation {
         answers,
         query,
         dicom: (*answer).data as *mut c_void,
         size: (*answer).size as u32,
-    });
+    };
     invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_WorklistAddAnswer,
-        Box::into_raw(params) as *mut c_void,
+        &mut params as *mut orthanc::_OrthancPluginWorklistAnswersOperation as *mut c_void,
     );
 }
 
