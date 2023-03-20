@@ -314,7 +314,7 @@ unsafe fn add_worklist_query_answer(
 
 unsafe fn free_buffer(buffer: *mut OrthancPluginMemoryBuffer) {
     let context = orthanc_context.as_ref().unwrap().0;
-    (*context).Free.unwrap()(buffer as *mut c_void);
+    (*context).Free.unwrap()((*buffer).data as *mut c_void);
 }
 
 unsafe fn invoke_orthanc_service(
