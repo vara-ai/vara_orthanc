@@ -279,10 +279,11 @@ unsafe fn dicom_matches_query(
     }
 
     let mut is_match: i32 = 0;
+    let dicom_buffer = &(*dicom);
     let mut params = QueryWorklistOperationParams {
         query,
-        dicom: (*dicom).data,
-        size: (*dicom).size,
+        dicom: dicom_buffer.data,
+        size: dicom_buffer.size,
         is_match: &mut is_match as *mut i32,
         target: std::ptr::null_mut(),
     };
