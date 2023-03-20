@@ -68,37 +68,32 @@ unsafe extern "C" fn on_worklist_callback(
     _issuerAet: *const c_char,
     _calledAet: *const c_char,
 ) -> OrthancPluginErrorCode {
-    let (ae_title, api_host, api_port) = peer_orthanc();
-    let worklist_items: Vec<JsonValue> =
-        match orthanc_modality_worklist(&ae_title, &api_host, api_port) {
-            Ok(JsonValue::Array(v)) => v,
-            _ => {
-                error("Failed to fetch modality worklist from peer Orthanc");
-                return 1;
-            }
-        };
-    for item in worklist_items {
-        let mut buffer = memory_buffer();
-        let buffer_ptr = &mut buffer as *mut OrthancPluginMemoryBuffer;
-        create_dicom(item.to_string(), buffer_ptr);
-        if dicom_matches_query(query, buffer_ptr) {
-            add_worklist_query_answer(answers, query, buffer_ptr)
-        };
-        free_buffer(buffer_ptr);
+    let mwl_endpoints = orthanc_modality_endpoints();
+    for endpoint in &mwl_endpoints {
+        let worklist_items: Vec<JsonValue> =
+            match orthanc_modality_worklist(endpoint) {
+                Ok(JsonValue::Array(v)) => v,
+                _ => {
+                    error("Failed to fetch modality worklist from peer Orthanc");
+                    return 1;
+                }
+            };
+        for item in worklist_items {
+            let mut buffer = memory_buffer();
+            let buffer_ptr = &mut buffer as *mut OrthancPluginMemoryBuffer;
+            create_dicom(item.to_string(), buffer_ptr);
+            if dicom_matches_query(query, buffer_ptr) {
+                add_worklist_query_answer(answers, query, buffer_ptr)
+            };
+            free_buffer(buffer_ptr);
+        }
     }
     return OrthancCodeSuccess;
 }
 
 unsafe fn orthanc_modality_worklist(
-    ae_title: &str,
-    host: &str,
-    port: u32,
+    endpoint: &str
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
-    let url = format!(
-        "http://{}:{}/modalities/{}/find-worklist",
-        host, port, ae_title
-    );
-
     let http_client = reqwest::blocking::Client::new();
     //
     //  Sample JSON payload that works:
@@ -124,7 +119,7 @@ unsafe fn orthanc_modality_worklist(
         env::var("VARA_ORTHANC_API_PASSWORD").unwrap_or(String::from("password"));
 
     let workitems = http_client
-        .post(url)
+        .post(endpoint)
         .body(
             r#"{"Short": true,
                   "Query": {"AccessionNumber": "*",
@@ -182,49 +177,25 @@ unsafe fn register_on_worklist_callback(
     );
 }
 
+
+// Returns a vector of endpoint URLs that can be queried for getting modality
+// worklist items. Currently only supports a single endpoint that is configured
+// by setting by environment variable: `VARA_ORTHANC_MODALITY_ENDPOINT`.
 //
-// Returns a tuple with (ae_title, ae_host, ae_port) of the Orthanc peer that we
-// want to communicate with.
-//
-unsafe fn peer_orthanc() -> (String, String, u32) {
+// TODO: Adjust everything to make use of Orthanc's configuration file.
+unsafe fn orthanc_modality_endpoints() -> Vec<String> {
     // By default, we send an API request to the same Orthanc instance that
-    // loads this plugin.
-    let default_value = (String::from("orthanc"), String::from("localhost"), 9042);
-    let ae_title;
-    let api_host;
-    let api_port;
-
-    match env::var("VARA_ORTHANC_AE_TITLE") {
-        Ok(ae_title_) => {
-            ae_title = ae_title_;
+    // loads this plugin. Default endpoint
+    let default_value = vec![String::from("http://localhost:9042/modalities/orthanc/find-worklist")];
+    match env::var("VARA_ORTHANC_MODALITY_ENDPOINT") {
+        Ok(modality_endpoint) => {
+            vec![modality_endpoint.to_string()]
         }
         error @ Err(_) => {
-            warning(&format!("VARA_ORTHANC_AE_TITLE not defined: {:?}", error));
-            return default_value;
+            warning(&format!("VARA_ORTHANC_MODALITY_ENDPOINT not defined: {:?}", error));
+            default_value
         }
-    };
-
-    match env::var("VARA_ORTHANC_API_HOST") {
-        Ok(api_host_) => {
-            api_host = api_host_;
-        }
-        error @ Err(_) => {
-            warning(&format!("VARA_ORTHANC_API_HOST not defined: {:?}", error));
-            return default_value;
-        }
-    };
-
-    match env::var("VARA_ORTHANC_API_PORT") {
-        Ok(api_port_) => {
-            api_port = api_port_;
-        }
-        error @ Err(_) => {
-            warning(&format!("VARA_ORTHANC_API_PORT not defined: {:?}", error));
-            return default_value;
-        }
-    };
-
-    (ae_title, api_host, api_port.parse().unwrap())
+    }
 }
 
 //
@@ -301,11 +272,13 @@ unsafe fn add_worklist_query_answer(
     query: *const OrthancPluginWorklistQuery,
     answer: *const OrthancPluginMemoryBuffer,
 ) {
+    // We do not want ownership of the value that this pointer points to.
+    let answers_buffer = &(*answer);
     let mut params = orthanc::_OrthancPluginWorklistAnswersOperation {
         answers,
         query,
-        dicom: (*answer).data as *mut c_void,
-        size: (*answer).size as u32,
+        dicom: answers_buffer.data as *mut c_void,
+        size: answers_buffer.size as u32,
     };
     invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_WorklistAddAnswer,
