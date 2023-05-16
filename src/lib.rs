@@ -9,8 +9,13 @@ extern crate tracing;
 pub mod cache;
 pub mod orthanc;
 
-use crate::orthanc::OrthancPluginContext;
+use crate::orthanc::info;
+use crate::orthanc::warning;
+use crate::orthanc::error;
+use crate::orthanc::invoke_orthanc_service;
+
 use crate::orthanc::OrthancPluginErrorCode;
+use crate::orthanc::OrthancPluginContext;
 use crate::orthanc::OrthancPluginErrorCode_OrthancPluginErrorCode_Success as OrthancCodeSuccess;
 use crate::orthanc::OrthancPluginMemoryBuffer;
 use crate::orthanc::OrthancPluginWorklistAnswers;
@@ -24,21 +29,10 @@ use std::ffi::CString;
 use std::path::Path;
 use std::vec::Vec;
 
-enum LogLevel {
-    Info,
-    Error,
-    Warning,
-}
-
-struct OrthancContext(*mut OrthancPluginContext);
-unsafe impl Send for OrthancContext {}
-unsafe impl Sync for OrthancContext {}
-
-static mut orthanc_context: Option<OrthancContext> = None;
 
 #[no_mangle]
 pub unsafe extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) -> i32 {
-    orthanc_context = Some(OrthancContext(context));
+    orthanc::set_context(context);
     // Before any of the services provided by Orthanc core (including logging)
     // are used, `orthanc_context` must be initialized.
     info("Initializing Vara Orthanc Worklist plugin.");
@@ -85,7 +79,7 @@ unsafe extern "C" fn on_worklist_callback(
             if dicom_matches_query(query, buffer_ptr) {
                 add_worklist_query_answer(answers, query, buffer_ptr)
             };
-            free_buffer(buffer_ptr);
+            orthanc::free_buffer(buffer_ptr);
         }
     }
     return OrthancCodeSuccess;
@@ -284,52 +278,4 @@ unsafe fn add_worklist_query_answer(
         orthanc::_OrthancPluginService__OrthancPluginService_WorklistAddAnswer,
         &mut params as *mut orthanc::_OrthancPluginWorklistAnswersOperation as *mut c_void,
     );
-}
-
-unsafe fn free_buffer(buffer: *mut OrthancPluginMemoryBuffer) {
-    let context = orthanc_context.as_ref().unwrap().0;
-    (*context).Free.unwrap()((*buffer).data as *mut c_void);
-}
-
-unsafe fn invoke_orthanc_service(
-    service: orthanc::_OrthancPluginService,
-    params: *mut c_void,
-) -> OrthancPluginErrorCode {
-    let context = orthanc_context.as_ref().unwrap().0;
-    let invoker = (*context).InvokeService.unwrap();
-    invoker(context, service, params)
-}
-
-unsafe fn log(level: LogLevel, msg: &str) {
-    let msg = CString::new(msg).unwrap();
-    let orthanc_plugin_service = match level {
-        LogLevel::Info => orthanc::_OrthancPluginService__OrthancPluginService_LogInfo,
-        LogLevel::Warning => orthanc::_OrthancPluginService__OrthancPluginService_LogWarning,
-        LogLevel::Error => orthanc::_OrthancPluginService__OrthancPluginService_LogError,
-    };
-
-    invoke_orthanc_service(orthanc_plugin_service, msg.as_ptr() as *mut c_void);
-}
-
-unsafe fn info(msg: &str) {
-    log(LogLevel::Info, msg);
-}
-
-unsafe fn error(msg: &str) {
-    log(LogLevel::Error, msg);
-}
-
-unsafe fn warning(msg: &str) {
-    log(LogLevel::Warning, msg);
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_parsing_json_response() {
-        let _example_json = r#"[{"0008,0005" : "ISO_IR 100",
-                             "0008,0050" : "1",
-                             "0010,0010" : "^Test Party"}
-                          ]"#;
-    }
 }
