@@ -149,7 +149,7 @@ unsafe fn orthanc_modality_worklist(
     Ok(serde_json::from_str(&json_response)?)
 }
 
-unsafe fn register_on_worklist_callback(
+fn register_on_worklist_callback(
     callback: unsafe extern "C" fn(
         answers: *mut OrthancPluginWorklistAnswers,
         query: *const OrthancPluginWorklistQuery,

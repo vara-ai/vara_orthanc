@@ -3,7 +3,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 use std::ffi::CString;
 use libc::c_void;
 use std::env;
-
+use std::sync::RwLock;
 
 enum LogLevel {
     Info,
@@ -12,16 +12,24 @@ enum LogLevel {
 }
 
 
-pub struct OrthancContext(pub *mut OrthancPluginContext);
-unsafe impl Send for OrthancContext {}
-unsafe impl Sync for OrthancContext {}
+pub struct PluginState {
+    context: Option<*mut OrthancPluginContext>
+}
 
-pub static mut orthanc_context: Option<Box<OrthancContext>> = None;
+unsafe impl Send for PluginState {}
+unsafe impl Sync for PluginState {}
+
+
+pub static PLUGIN_STATE: RwLock<PluginState> = RwLock::new(PluginState {
+    context: None
+});
 
 pub fn set_context(context: *mut OrthancPluginContext) {
-    unsafe {
-        orthanc_context = Some(Box::new(OrthancContext(context)));
-    }
+    PLUGIN_STATE.write().unwrap().context = Some(context);
+}
+
+pub fn get_context() -> *mut OrthancPluginContext {
+    PLUGIN_STATE.read().unwrap().context.unwrap()
 }
 
 pub fn invoke_orthanc_service(
@@ -29,14 +37,14 @@ pub fn invoke_orthanc_service(
     params: *mut c_void,
 ) -> OrthancPluginErrorCode {
     unsafe {
-        let context = orthanc_context.as_ref().unwrap().0;
+        let context = get_context();
         let invoker = (*context).InvokeService.unwrap();
         invoker(context, service, params)
     }
 }
 
 pub unsafe fn free_buffer(buffer: *mut OrthancPluginMemoryBuffer) {
-    let context = orthanc_context.as_ref().unwrap().0;
+    let context = get_context();
     (*context).Free.unwrap()((*buffer).data as *mut c_void);
 }
 
