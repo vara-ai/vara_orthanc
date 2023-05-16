@@ -9,11 +9,6 @@ extern crate tracing;
 pub mod cache;
 pub mod orthanc;
 
-use crate::orthanc::info;
-use crate::orthanc::warning;
-use crate::orthanc::error;
-use crate::orthanc::invoke_orthanc_service;
-
 use crate::orthanc::OrthancPluginErrorCode;
 use crate::orthanc::OrthancPluginContext;
 use crate::orthanc::OrthancPluginErrorCode_OrthancPluginErrorCode_Success as OrthancCodeSuccess;
@@ -31,19 +26,19 @@ use std::vec::Vec;
 
 
 #[no_mangle]
-pub unsafe extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) -> i32 {
+pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) -> i32 {
     orthanc::set_context(context);
     // Before any of the services provided by Orthanc core (including logging)
     // are used, `orthanc_context` must be initialized.
-    info("Initializing Vara Orthanc Worklist plugin.");
+    orthanc::info("Initializing Vara Orthanc Worklist plugin.");
     register_on_worklist_callback(on_worklist_callback);
-    info("Vara Orthanc Worklist plugin initialization complete.");
+    orthanc::info("Vara Orthanc Worklist plugin initialization complete.");
     return 0;
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn OrthancPluginFinalize() {
-    info("Vara Ortahnc Worklist plugin finalized.");
+pub extern "C" fn OrthancPluginFinalize() {
+    orthanc::info("Vara Ortahnc Worklist plugin finalized.");
 }
 
 #[no_mangle]
@@ -56,7 +51,7 @@ pub extern "C" fn OrthancPluginGetVersion() -> *const u8 {
     "0.1.0\0".as_ptr()
 }
 
-unsafe extern "C" fn on_worklist_callback(
+extern "C" fn on_worklist_callback(
     answers: *mut OrthancPluginWorklistAnswers,
     query: *const OrthancPluginWorklistQuery,
     _issuerAet: *const c_char,
@@ -68,7 +63,7 @@ unsafe extern "C" fn on_worklist_callback(
             match orthanc_modality_worklist(endpoint) {
                 Ok(JsonValue::Array(v)) => v,
                 _ => {
-                    error("Failed to fetch modality worklist from peer Orthanc");
+                    orthanc::error("Failed to fetch modality worklist from peer Orthanc");
                     return 1;
                 }
             };
@@ -85,7 +80,7 @@ unsafe extern "C" fn on_worklist_callback(
     return OrthancCodeSuccess;
 }
 
-unsafe fn orthanc_modality_worklist(
+fn orthanc_modality_worklist(
     endpoint: &str
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
     let http_client = reqwest::blocking::Client::new();
@@ -129,14 +124,14 @@ unsafe fn orthanc_modality_worklist(
     let cache_file = Path::new("vara_orthanc.json");
     let json_response = if workitems.is_err() || !workitems.as_ref().unwrap().status().is_success()
     {
-        info(&format!(
+        orthanc::info(&format!(
             "Reading the cache file for MWL entries. Failure: {:?}",
             workitems
         ));
         match cache::read(&cache_file) {
             Ok(contents) => contents,
             Err(error) => {
-                warning("Failed to read cache file");
+                orthanc::warning("Failed to read cache file");
                 return Err(Box::new(error));
             }
         }
@@ -150,7 +145,7 @@ unsafe fn orthanc_modality_worklist(
 }
 
 fn register_on_worklist_callback(
-    callback: unsafe extern "C" fn(
+    callback: extern "C" fn(
         answers: *mut OrthancPluginWorklistAnswers,
         query: *const OrthancPluginWorklistQuery,
         _issuerAet: *const c_char,
@@ -165,19 +160,18 @@ fn register_on_worklist_callback(
         callback: Some(callback),
     };
 
-    invoke_orthanc_service(
+    orthanc::invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_RegisterWorklistCallback,
         &mut params as *mut OnWorklistParams as *mut c_void,
     );
 }
-
 
 // Returns a vector of endpoint URLs that can be queried for getting modality
 // worklist items. Currently only supports a single endpoint that is configured
 // by setting by environment variable: `VARA_ORTHANC_MODALITY_ENDPOINT`.
 //
 // TODO: Adjust everything to make use of Orthanc's configuration file.
-unsafe fn orthanc_modality_endpoints() -> Vec<String> {
+fn orthanc_modality_endpoints() -> Vec<String> {
     // By default, we send an API request to the same Orthanc instance that
     // loads this plugin. Default endpoint
     let default_value = vec![String::from("http://localhost:9042/modalities/orthanc/find-worklist")];
@@ -186,7 +180,7 @@ unsafe fn orthanc_modality_endpoints() -> Vec<String> {
             vec![modality_endpoint.to_string()]
         }
         error @ Err(_) => {
-            warning(&format!("VARA_ORTHANC_MODALITY_ENDPOINT not defined: {:?}", error));
+            orthanc::warning(&format!("VARA_ORTHANC_MODALITY_ENDPOINT not defined: {:?}", error));
             default_value
         }
     }
@@ -196,7 +190,7 @@ unsafe fn orthanc_modality_endpoints() -> Vec<String> {
 // Returns a pointer to an OrthancPluginMemoryBuffer that can be used later by
 // Orthanc core to provide or receive data. The buffer is empty and no memory is
 // requested from Orthanc core.
-unsafe fn memory_buffer() -> OrthancPluginMemoryBuffer {
+fn memory_buffer() -> OrthancPluginMemoryBuffer {
     let buffer = OrthancPluginMemoryBuffer {
         data: std::ptr::null::<c_void>() as *mut c_void,
         size: 0,
@@ -204,7 +198,7 @@ unsafe fn memory_buffer() -> OrthancPluginMemoryBuffer {
     buffer
 }
 
-unsafe fn create_dicom(dicom_json: String, target_buffer: *mut OrthancPluginMemoryBuffer) -> i32 {
+fn create_dicom(dicom_json: String, target_buffer: *mut OrthancPluginMemoryBuffer) -> i32 {
     #[repr(C)]
     struct CreateDicomParams {
         target: *mut OrthancPluginMemoryBuffer,
@@ -224,13 +218,13 @@ unsafe fn create_dicom(dicom_json: String, target_buffer: *mut OrthancPluginMemo
         private_creator: private_creator.as_ptr() as *const c_char,
     };
 
-    invoke_orthanc_service(
+    orthanc::invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_CreateDicom2,
         &mut params as *mut CreateDicomParams as *mut c_void,
     )
 }
 
-unsafe fn dicom_matches_query(
+fn dicom_matches_query(
     query: *const OrthancPluginWorklistQuery,
     dicom: *const OrthancPluginMemoryBuffer,
 ) -> bool {
@@ -244,7 +238,7 @@ unsafe fn dicom_matches_query(
     }
 
     let mut is_match: i32 = 0;
-    let dicom_buffer = &(*dicom);
+    let dicom_buffer = unsafe { &(*dicom) };
     let mut params = QueryWorklistOperationParams {
         query,
         dicom: dicom_buffer.data,
@@ -253,28 +247,28 @@ unsafe fn dicom_matches_query(
         target: std::ptr::null_mut(),
     };
 
-    invoke_orthanc_service(
+    orthanc::invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_WorklistIsMatch,
         &mut params as *mut QueryWorklistOperationParams as *mut c_void,
     );
 
-    (*params.is_match) != 0
+    unsafe { (*params.is_match) != 0 }
 }
 
-unsafe fn add_worklist_query_answer(
+fn add_worklist_query_answer(
     answers: *mut OrthancPluginWorklistAnswers,
     query: *const OrthancPluginWorklistQuery,
     answer: *const OrthancPluginMemoryBuffer,
 ) {
     // We do not want ownership of the value that this pointer points to.
-    let answers_buffer = &(*answer);
+    let answers_buffer = unsafe { &(*answer) };
     let mut params = orthanc::_OrthancPluginWorklistAnswersOperation {
         answers,
         query,
         dicom: answers_buffer.data as *mut c_void,
         size: answers_buffer.size as u32,
     };
-    invoke_orthanc_service(
+    orthanc::invoke_orthanc_service(
         orthanc::_OrthancPluginService__OrthancPluginService_WorklistAddAnswer,
         &mut params as *mut orthanc::_OrthancPluginWorklistAnswersOperation as *mut c_void,
     );

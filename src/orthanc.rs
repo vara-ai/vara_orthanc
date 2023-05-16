@@ -11,7 +11,6 @@ enum LogLevel {
     Warning,
 }
 
-
 pub struct PluginState {
     context: Option<*mut OrthancPluginContext>
 }
@@ -43,9 +42,9 @@ pub fn invoke_orthanc_service(
     }
 }
 
-pub unsafe fn free_buffer(buffer: *mut OrthancPluginMemoryBuffer) {
+pub fn free_buffer(buffer: *mut OrthancPluginMemoryBuffer) {
     let context = get_context();
-    (*context).Free.unwrap()((*buffer).data as *mut c_void);
+    unsafe { (*context).Free.unwrap()((*buffer).data as *mut c_void) };
 }
 
 fn log(level: LogLevel, msg: &str) {
