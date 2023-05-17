@@ -312,6 +312,12 @@
      * Network topology
      **/
 
+    "VaraProxy": {
+        "Endpoint": "http://localhost:8042",
+        "Username": "admin",
+        "Password": "password"
+    },
+
     // The list of the known DICOM modalities. This option is ignored if
     // "DicomModalitiesInDatabase" is set to "true", in which case you
     // must use the REST API to define modalities.
