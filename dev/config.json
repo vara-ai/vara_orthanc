@@ -439,7 +439,7 @@
     // "OrthancPeersInDatabase" is set to "true", in which case you must
     // use the REST API to define Orthanc peers.
     "OrthancPeers": {
-        "target": ["http://localhost:8042" "admin" "password"]
+        "target": ["http://localhost:8042", "admin", "password"]
         /**
          * Each line gives the base URL of an Orthanc peer, possibly
          * followed by the username/password pair (if the password
