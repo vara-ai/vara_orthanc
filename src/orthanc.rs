@@ -59,8 +59,9 @@ pub fn sync_studies() {
         .into_iter()
         .filter(|local_study_id| peer_studies.contains(local_study_id))
         .collect();
+    plugin::info(&format!("Transferring studies: {:?}", missing_studies));
     match local_orthanc.transfer_studies(&plugin::get_peer_identifier(), missing_studies) {
-        Ok(response) => plugin::info(&format!("Successfully transferred studies: {:?}", response)),
+        Ok(_response) => plugin::info(&format!("Successfully transferred studies.")),
         Err(error) => plugin::info(&format!("Failed to transfer studies: {:?}", error))
     };
 }

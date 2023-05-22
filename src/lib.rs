@@ -331,9 +331,10 @@ extern "C" fn on_change(
 
             match orthanc_client.transfer_studies(
                 &orthanc::plugin::get_peer_identifier(),
-                vec![resource_id.unwrap()],
+                vec![resource_id.clone().unwrap().clone()],
             ) {
-                Ok(_) => orthanc::plugin::info("Successfully transferred study."),
+                Ok(_) => orthanc::plugin::info(&format!("Successfully transferred study: {}",
+                                                        resource_id.unwrap())),
                 error => orthanc::plugin::info(&format!(
                     "Encountered error while transferring a study: {:?}",
                     error

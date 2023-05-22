@@ -104,9 +104,9 @@ fn get_orthanc_config() -> json::Value {
         &mut params as *mut _OrthancPluginRetrieveDynamicString as *mut c_void,
     );
 
-    unsafe {
-        info(CStr::from_ptr(*params.result).to_str().unwrap());
-    };
+    // unsafe {
+    //     info(CStr::from_ptr(*params.result).to_str().unwrap());
+    // };
     let config_cstr = unsafe { CStr::from_ptr(*params.result) };
     let config_str = config_cstr.to_str().unwrap().to_string();
     unsafe { (*get_context()).Free.unwrap()(*params.result as *mut c_void) };
