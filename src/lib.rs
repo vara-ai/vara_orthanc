@@ -35,7 +35,7 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
     register_on_worklist_callback(Some(on_worklist_callback));
     register_on_change_callback(Some(on_change));
     // Spin off a thread for creating jobs to synchronize existing studies.
-    orthanc::plugin::get_threadpool().execute (move || {
+    orthanc::plugin::get_threadpool().execute(move || {
         // If plugin initialization takes more than 60 seconds, it's fine to
         // panic and fail. Adding a sleep here so that we execute the function
         // only after `OrthancPluginInitialize` has finished executing.
@@ -44,7 +44,9 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
         // Periodically sync studies in a loop every 10 minutes.
         loop {
             orthanc::plugin::info("[Periodic Sync] Begin.");
-            orthanc::sync_studies();
+            if let Err(error) = orthanc::sync_studies() {
+                orthanc::plugin::error(&format!("Periodic sync failed. {:?}", error));
+            }
             orthanc::plugin::info("[Periodic Sync] End.");
             thread::sleep(time::Duration::from_secs(600));
         }
@@ -333,8 +335,11 @@ extern "C" fn on_change(
                 &orthanc::plugin::get_peer_identifier(),
                 vec![resource_id.clone().unwrap().clone()],
             ) {
-                Ok(_) => orthanc::plugin::info(&format!("Successfully transferred study: {}",
-                                                        resource_id.unwrap())),
+                Ok(response) => orthanc::plugin::info(&format!(
+                    "Successfully transferred study: {} {:?}",
+                    resource_id.unwrap(),
+                    response
+                )),
                 error => orthanc::plugin::info(&format!(
                     "Encountered error while transferring a study: {:?}",
                     error

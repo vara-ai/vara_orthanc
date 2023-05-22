@@ -1,7 +1,7 @@
+use reqwest::Result;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Display;
-
 pub mod http;
 pub mod plugin;
 
@@ -16,7 +16,11 @@ pub struct Endpoint {
 
 impl Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Url: {} Username: {} Password: {}", self.url, self.username, self.password)
+        write!(
+            f,
+            "Url: {} Username: {} Password: {}",
+            self.url, self.username, self.password
+        )
     }
 }
 
@@ -32,7 +36,7 @@ impl OrthancClient {
     }
 }
 
-pub fn sync_studies() {
+pub fn sync_studies() -> Result<()> {
     let local_endpoint = plugin::get_local_endpoint();
     let peer_endpoint = plugin::get_peer_endpoint().unwrap();
     plugin::info(&format!(
@@ -52,9 +56,8 @@ pub fn sync_studies() {
         &peer_endpoint.password,
     );
 
-    let local_studies: HashSet<String> =
-        local_orthanc.get_study_ids().unwrap().into_iter().collect();
-    let peer_studies: HashSet<String> = peer_orthanc.get_study_ids().unwrap().into_iter().collect();
+    let local_studies: HashSet<String> = local_orthanc.get_study_ids()?.into_iter().collect();
+    let peer_studies: HashSet<String> = peer_orthanc.get_study_ids()?.into_iter().collect();
     let missing_studies: Vec<String> = local_studies
         .into_iter()
         .filter(|local_study_id| peer_studies.contains(local_study_id))
@@ -63,9 +66,14 @@ pub fn sync_studies() {
         plugin::info(&format!("Transferring studies: {:?}", missing_studies));
         match local_orthanc.transfer_studies(&plugin::get_peer_identifier(), missing_studies) {
             Ok(_response) => plugin::info(&format!("Successfully transferred studies.")),
-            Err(error) => plugin::info(&format!("Failed to transfer studies: {:?}", error))
-        };
+            Err(error) => {
+                plugin::info(&format!("Failed to transfer studies: {:?}", error));
+                return Err(error);
+            }
+        }
     } else {
         plugin::info("No new studies to sync.");
     }
+
+    Ok(())
 }

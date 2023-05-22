@@ -21,12 +21,17 @@ fn get_entities(
         .get(url)
         .basic_auth(&username, Some(&password))
         .send()?;
-    let response: json::Value = response.json()?;
-    let mut ids = vec![];
-    for id in response.as_array().unwrap() {
-        ids.push(id.as_str().unwrap().to_string());
+
+    if  response.error_for_status_ref().is_err() {
+        Err(response.error_for_status().err().unwrap())
+    } else {
+        let response: json::Value = response.json()?;
+        let mut ids = vec![];
+        for id in response.as_array().unwrap() {
+            ids.push(id.as_str().unwrap().to_string());
+        }
+        Ok(ids)
     }
-    Ok(ids)
 }
 
 impl OrthancClient {
@@ -59,11 +64,11 @@ impl OrthancClient {
             .basic_auth(&self.username, Some(&self.password))
             .json(&request)
             .build()?;
-        let response = self.http_client.execute(request);
-        if response.is_err() || !response.unwrap().status().is_success() {
-            println!("Error while transferring study. Try dbg! on response above.");
-        };
-
-        Ok(())
+        let response = self.http_client.execute(request)?;
+        if response.error_for_status_ref().is_err() {
+            return Err(response.error_for_status().err().unwrap());
+        } else {
+            Ok(())
+        }
     }
 }
