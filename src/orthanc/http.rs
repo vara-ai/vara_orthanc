@@ -21,12 +21,12 @@ fn get_entities(
         .get(url)
         .basic_auth(&username, Some(&password))
         .send()?;
-    let response: json::Value = dbg!(response.json())?;
+    let response: json::Value = response.json()?;
     let mut ids = vec![];
     for id in response.as_array().unwrap() {
         ids.push(id.as_str().unwrap().to_string());
     }
-    Ok(dbg!(ids))
+    Ok(ids)
 }
 
 impl OrthancClient {

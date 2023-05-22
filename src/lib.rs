@@ -325,7 +325,7 @@ extern "C" fn on_change(
             == orthanc::plugin::OrthancPluginResourceType_OrthancPluginResourceType_Study
         {
             // Let's assume that we can handle one endpoint for the time being.
-            let endpoint = dbg!(orthanc::plugin::get_local_endpoint());
+            let endpoint = orthanc::plugin::get_local_endpoint();
             let orthanc_client =
                 orthanc::OrthancClient::new(&endpoint.url, &endpoint.username, &endpoint.password);
 
