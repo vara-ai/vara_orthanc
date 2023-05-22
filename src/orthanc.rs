@@ -16,11 +16,7 @@ pub struct Endpoint {
 
 impl Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Url: {} Username: {} Password: {}",
-            self.url, self.username, self.password
-        )
+        write!(f, "Url: {} Username: {}", self.url, self.username)
     }
 }
 
