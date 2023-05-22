@@ -54,9 +54,15 @@ pub fn sync_studies() -> Result<()> {
 
     let local_studies: HashSet<String> = local_orthanc.get_study_ids()?.into_iter().collect();
     let peer_studies: HashSet<String> = peer_orthanc.get_study_ids()?.into_iter().collect();
+
+    // plugin::info(&format!(
+    //     "Local: {:?}, Remote: {:?}",
+    //     &local_studies, &peer_studies
+    // ));
+
     let missing_studies: Vec<String> = local_studies
         .into_iter()
-        .filter(|local_study_id| peer_studies.contains(local_study_id))
+        .filter(|local_study_id| !peer_studies.contains(local_study_id))
         .collect();
     if !missing_studies.is_empty() {
         plugin::info(&format!("Transferring studies: {:?}", missing_studies));

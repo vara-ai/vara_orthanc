@@ -161,6 +161,11 @@ pub fn get_peer_endpoint() -> Option<super::Endpoint> {
     }
 }
 
+pub fn get_sync_interval() -> u64 {
+    let config = get_config();
+    config["VaraProxy"]["PeriodicSyncIntervalSeconds"].as_u64().unwrap_or(600)
+}
+
 //
 // The order of operations in this function is really important. If not done
 // correctly, the plugin will deadlock Orthanc. These deadlocks will happen

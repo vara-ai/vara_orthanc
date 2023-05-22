@@ -313,7 +313,8 @@
      **/
 
     "VaraProxy": {
-        "Peer": "target"
+        "Peer": "target",
+        "PeriodicSyncIntervalSeconds": 10
     },
 
     // The list of the known DICOM modalities. This option is ignored if

@@ -41,14 +41,15 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
         // only after `OrthancPluginInitialize` has finished executing.
         thread::sleep(time::Duration::from_secs(60));
 
-        // Periodically sync studies in a loop every 10 minutes.
+        // Periodically sync studies in a loop. Period configurable via
+        // "VaraProxy" -> "PeriodicSyncIntervalSeconds". Default: 10 minutes.
         loop {
             orthanc::plugin::info("[Periodic Sync] Begin.");
             if let Err(error) = orthanc::sync_studies() {
                 orthanc::plugin::error(&format!("Periodic sync failed. {:?}", error));
             }
             orthanc::plugin::info("[Periodic Sync] End.");
-            thread::sleep(time::Duration::from_secs(600));
+            thread::sleep(time::Duration::from_secs(orthanc::plugin::get_sync_interval()));
         }
     });
     orthanc::plugin::info("Vara Orthanc Worklist plugin initialization complete.");
