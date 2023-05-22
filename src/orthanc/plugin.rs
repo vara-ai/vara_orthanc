@@ -8,12 +8,14 @@ use std::env;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::sync::RwLock;
+use threadpool::ThreadPool;
 
 #[derive(Debug)]
 pub struct PluginState {
     pub http_client: Option<HttpClient>,
     pub context: Option<*mut OrthancPluginContext>,
     pub config: Option<json::Value>,
+    pub threadpool: Option<ThreadPool>,
 }
 
 unsafe impl Send for PluginState {}
@@ -23,6 +25,7 @@ pub static PLUGIN_STATE: RwLock<PluginState> = RwLock::new(PluginState {
     http_client: None,
     context: None,
     config: None,
+    threadpool: None,
 });
 
 pub fn get_context() -> *mut OrthancPluginContext {
@@ -32,6 +35,12 @@ pub fn get_context() -> *mut OrthancPluginContext {
 pub fn get_config() -> json::Value {
     // TODO: Figure out how to share config without cloning it.
     PLUGIN_STATE.read().unwrap().config.clone().unwrap().clone()
+}
+
+pub fn get_threadpool() -> ThreadPool {
+    // Cloning a ThreadPool creates a new handle from the same threadpool:
+    // https://docs.rs/threadpool/latest/src/threadpool/lib.rs.html#639-682
+    PLUGIN_STATE.read().unwrap().threadpool.clone().unwrap()
 }
 
 pub fn invoke_orthanc_service(
@@ -128,8 +137,11 @@ pub fn get_peer_endpoint() -> Option<super::Endpoint> {
         let peer_identifier = c["VaraProxy"]["Peer"].as_str().unwrap();
 
         if c["OrthancPeers"][peer_identifier] == json::json!(null) {
-            error(&format!("Please configure peer identifier: {}", peer_identifier));
-            return None
+            error(&format!(
+                "Please configure peer identifier: {}",
+                peer_identifier
+            ));
+            return None;
         }
 
         let peer_coords: Vec<String> = c["OrthancPeers"][peer_identifier]
@@ -167,4 +179,8 @@ pub fn initialize(context: *mut OrthancPluginContext) {
     let mut plugin_state = PLUGIN_STATE.write().unwrap();
     plugin_state.config = Some(config);
     plugin_state.http_client = Some(HttpClient::new());
+    // Arbitrarily chosen 8 threads, most of the work happening in these threads
+    // is I/O so the number can be significantly higher than the number of CPUs
+    // on the machine (https://crates.io/crates/num_cpus).
+    plugin_state.threadpool = Some(ThreadPool::new(8))
 }

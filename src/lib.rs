@@ -35,11 +35,19 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
     register_on_worklist_callback(Some(on_worklist_callback));
     register_on_change_callback(Some(on_change));
     // Spin off a thread for creating jobs to synchronize existing studies.
-    thread::spawn(move || {
+    orthanc::plugin::get_threadpool().execute (move || {
         // If plugin initialization takes more than 60 seconds, it's fine to
-        // panic and fail.
+        // panic and fail. Adding a sleep here so that we execute the function
+        // only after `OrthancPluginInitialize` has finished executing.
         thread::sleep(time::Duration::from_secs(60));
-        orthanc::sync_studies();
+
+        // Periodically sync studies in a loop every 10 minutes.
+        loop {
+            orthanc::plugin::info("[Periodic Sync] Begin.");
+            orthanc::sync_studies();
+            orthanc::plugin::info("[Periodic Sync] End.");
+            thread::sleep(time::Duration::from_secs(600));
+        }
     });
     orthanc::plugin::info("Vara Orthanc Worklist plugin initialization complete.");
     return 0;
