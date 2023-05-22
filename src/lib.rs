@@ -9,8 +9,8 @@ extern crate tracing;
 pub mod cache;
 pub mod orthanc;
 
-use orthanc::plugin::OrthancPluginErrorCode;
 use orthanc::plugin::OrthancPluginContext;
+use orthanc::plugin::OrthancPluginErrorCode;
 use orthanc::plugin::OrthancPluginErrorCode_OrthancPluginErrorCode_Success as OrthancCodeSuccess;
 use orthanc::plugin::OrthancPluginMemoryBuffer;
 use orthanc::plugin::OrthancPluginWorklistAnswers;
@@ -24,6 +24,7 @@ use std::ffi::CString;
 use std::path::Path;
 use std::vec::Vec;
 
+use std::{thread, time};
 
 #[no_mangle]
 pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) -> i32 {
@@ -31,7 +32,15 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
     // Before any of the services provided by Orthanc core (including logging)
     // are used, `orthanc_context` must be initialized.
     orthanc::plugin::info("Initializing Vara Orthanc Worklist plugin.");
-    register_on_worklist_callback(on_worklist_callback);
+    register_on_worklist_callback(Some(on_worklist_callback));
+    register_on_change_callback(Some(on_change));
+    // Spin off a thread for creating jobs to synchronize existing studies.
+    thread::spawn(move || {
+        // If plugin initialization takes more than 60 seconds, it's fine to
+        // panic and fail.
+        thread::sleep(time::Duration::from_secs(60));
+        orthanc::sync_studies();
+    });
     orthanc::plugin::info("Vara Orthanc Worklist plugin initialization complete.");
     return 0;
 }
@@ -59,14 +68,13 @@ extern "C" fn on_worklist_callback(
 ) -> OrthancPluginErrorCode {
     let mwl_endpoints = orthanc_modality_endpoints();
     for endpoint in &mwl_endpoints {
-        let worklist_items: Vec<JsonValue> =
-            match orthanc_modality_worklist(endpoint) {
-                Ok(JsonValue::Array(v)) => v,
-                _ => {
-                    orthanc::plugin::error("Failed to fetch modality worklist from peer Orthanc");
-                    return 1;
-                }
-            };
+        let worklist_items: Vec<JsonValue> = match orthanc_modality_worklist(endpoint) {
+            Ok(JsonValue::Array(v)) => v,
+            _ => {
+                orthanc::plugin::error("Failed to fetch modality worklist from peer Orthanc");
+                return 1;
+            }
+        };
         for item in worklist_items {
             let mut buffer = memory_buffer();
             let buffer_ptr = &mut buffer as *mut OrthancPluginMemoryBuffer;
@@ -80,9 +88,7 @@ extern "C" fn on_worklist_callback(
     return OrthancCodeSuccess;
 }
 
-fn orthanc_modality_worklist(
-    endpoint: &str
-) -> Result<JsonValue, Box<dyn std::error::Error>> {
+fn orthanc_modality_worklist(endpoint: &str) -> Result<JsonValue, Box<dyn std::error::Error>> {
     let http_client = reqwest::blocking::Client::new();
     //
     //  Sample JSON payload that works:
@@ -144,25 +150,19 @@ fn orthanc_modality_worklist(
     Ok(serde_json::from_str(&json_response)?)
 }
 
-fn register_on_worklist_callback(
-    callback: extern "C" fn(
-        answers: *mut OrthancPluginWorklistAnswers,
-        query: *const OrthancPluginWorklistQuery,
-        _issuerAet: *const c_char,
-        _calledAet: *const c_char,
-    ) -> OrthancPluginErrorCode,
-) {
-    #[repr(C)]
-    struct OnWorklistParams {
-        callback: orthanc::plugin::OrthancPluginWorklistCallback,
-    }
-    let mut params = OnWorklistParams {
-        callback: Some(callback),
-    };
-
+fn register_on_worklist_callback(callback: orthanc::plugin::OrthancPluginWorklistCallback) {
+    let mut params = orthanc::plugin::_OrthancPluginWorklistCallback { callback };
     orthanc::plugin::invoke_orthanc_service(
         orthanc::plugin::_OrthancPluginService__OrthancPluginService_RegisterWorklistCallback,
-        &mut params as *mut OnWorklistParams as *mut c_void,
+        &mut params as *mut orthanc::plugin::_OrthancPluginWorklistCallback as *mut c_void,
+    );
+}
+
+fn register_on_change_callback(callback: orthanc::plugin::OrthancPluginOnChangeCallback) {
+    let params = orthanc::plugin::_OrthancPluginOnChangeCallback { callback };
+    orthanc::plugin::invoke_orthanc_service(
+        orthanc::plugin::_OrthancPluginService__OrthancPluginService_RegisterOnChangeCallback,
+        &params as *const orthanc::plugin::_OrthancPluginOnChangeCallback as *mut c_void,
     );
 }
 
@@ -174,13 +174,18 @@ fn register_on_worklist_callback(
 fn orthanc_modality_endpoints() -> Vec<String> {
     // By default, we send an API request to the same Orthanc instance that
     // loads this plugin. Default endpoint
-    let default_value = vec![String::from("http://localhost:9042/modalities/orthanc/find-worklist")];
+    let default_value = vec![String::from(
+        "http://localhost:9042/modalities/orthanc/find-worklist",
+    )];
     match env::var("VARA_ORTHANC_MODALITY_ENDPOINT") {
         Ok(modality_endpoint) => {
             vec![modality_endpoint.to_string()]
         }
         error @ Err(_) => {
-            orthanc::plugin::warning(&format!("VARA_ORTHANC_MODALITY_ENDPOINT not defined: {:?}", error));
+            orthanc::plugin::warning(&format!(
+                "VARA_ORTHANC_MODALITY_ENDPOINT not defined: {:?}",
+                error
+            ));
             default_value
         }
     }
@@ -272,4 +277,65 @@ fn add_worklist_query_answer(
         orthanc::plugin::_OrthancPluginService__OrthancPluginService_WorklistAddAnswer,
         &mut params as *mut orthanc::plugin::_OrthancPluginWorklistAnswersOperation as *mut c_void,
     );
+}
+
+//
+
+extern "C" fn on_change(
+    change_type: orthanc::plugin::OrthancPluginChangeType,
+    resource_type: orthanc::plugin::OrthancPluginResourceType,
+    resource_id: *const ::std::os::raw::c_char,
+) -> orthanc::plugin::OrthancPluginErrorCode {
+    let resource_id = if resource_id.is_null() {
+        None
+    } else {
+        match unsafe { std::ffi::CStr::from_ptr(resource_id) }.to_str() {
+            Ok(cstr) => Some(cstr.to_string()),
+            Err(e) => {
+                orthanc::plugin::error(&format!(
+                    "unable to parse resource_id to Utf8-String - {}",
+                    e
+                ));
+                None
+            }
+        }
+    };
+
+    orthanc::plugin::info(&format!(
+        "received on_change - type {}, resource {}, id {:?}",
+        change_type, resource_type, resource_id
+    ));
+
+    // Transfer in a separate thread. (Note the warning here:
+    // https://sdk.orthanc-server.com/group__Callbacks.html#ga78140887a94f1afb067a15db5ee4099c
+    // ). This needs to happen in a separate thread.
+    //
+    // TODO: better thread pool management.
+    //
+    thread::spawn(move || {
+        if change_type
+            == orthanc::plugin::OrthancPluginChangeType_OrthancPluginChangeType_StableStudy
+            && resource_id.is_some()
+            && resource_type
+            == orthanc::plugin::OrthancPluginResourceType_OrthancPluginResourceType_Study
+        {
+            // Let's assume that we can handle one endpoint for the time being.
+            let endpoint = dbg!(orthanc::plugin::get_local_endpoint());
+            let orthanc_client =
+                orthanc::OrthancClient::new(&endpoint.url, &endpoint.username, &endpoint.password);
+
+            match orthanc_client.transfer_studies(
+                &orthanc::plugin::get_peer_identifier(),
+                vec![resource_id.unwrap()],
+            ) {
+                Ok(_) => orthanc::plugin::info("Successfully transferred study."),
+                error => orthanc::plugin::info(&format!(
+                    "Encountered error while transferring a study: {:?}",
+                    error
+                )),
+            }
+        }
+    });
+
+    orthanc::plugin::OrthancPluginErrorCode_OrthancPluginErrorCode_Success
 }

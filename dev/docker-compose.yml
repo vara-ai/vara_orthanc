@@ -5,7 +5,7 @@ version: "3.7"
 services:
   proxy-orthanc:
     image: eu.gcr.io/mx-healthcare-product-dev/orthanc:${MXH_IMAGE_TAG:-latest}
-    command: "--trace /config/config.json"
+    command: "--trace-plugins --trace-jobs --trace-http /config/config.json"
     # build: orthanc/
     # For reasons I don't yet understand, IP of the docker bridge interface
     # doesn't work.
