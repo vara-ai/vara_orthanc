@@ -317,10 +317,7 @@ extern "C" fn on_change(
     // Transfer in a separate thread. (Note the warning here:
     // https://sdk.orthanc-server.com/group__Callbacks.html#ga78140887a94f1afb067a15db5ee4099c
     // ). This needs to happen in a separate thread.
-    //
-    // TODO: better thread pool management.
-    //
-    thread::spawn(move || {
+    orthanc::plugin::get_threadpool().execute(move || {
         if change_type
             == orthanc::plugin::OrthancPluginChangeType_OrthancPluginChangeType_StableStudy
             && resource_id.is_some()
