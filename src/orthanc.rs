@@ -22,7 +22,14 @@ impl Display for Endpoint {
 
 impl OrthancClient {
     pub fn new(url: &str, username: &str, password: &str) -> Self {
-        let http_client = reqwest::blocking::Client::new();
+        // Cloning a `reqwest::blocking::Client` creates a new handle to same
+        // client.
+        let http_client = plugin::PLUGIN_STATE
+            .read()
+            .unwrap()
+            .http_client
+            .clone()
+            .unwrap();
         OrthancClient {
             url: String::from(url),
             username: String::from(username),
