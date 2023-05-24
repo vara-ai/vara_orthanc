@@ -34,7 +34,7 @@ pub fn get_context() -> *mut OrthancPluginContext {
 
 pub fn get_config() -> json::Value {
     // TODO: Figure out how to share config without cloning it.
-    PLUGIN_STATE.read().unwrap().config.clone().unwrap().clone()
+    PLUGIN_STATE.read().unwrap().config.clone().unwrap()
 }
 
 pub fn get_threadpool() -> ThreadPool {
