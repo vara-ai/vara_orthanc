@@ -58,7 +58,7 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
 
 #[no_mangle]
 pub extern "C" fn OrthancPluginFinalize() {
-    orthanc::plugin::info("Vara Ortahnc Worklist plugin finalized.");
+    orthanc::plugin::info("Vara Orthanc Worklist plugin finalized.");
 }
 
 #[no_mangle]
