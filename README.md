@@ -1,4 +1,4 @@
-# vara_orthanc
+# orthanc_vara
 
 A custom Orthanc plugin capable of 
 - handling MWL C-FIND queries by proxying them to an Orthanc peer. Results are cached if the proxied peer is unavailable. 
