@@ -312,11 +312,16 @@
      * Network topology
      **/
 
+    "VaraProxy": {
+        "Peer": "target",
+        "PeriodicSyncIntervalSeconds": 10
+    },
+
     // The list of the known DICOM modalities. This option is ignored if
     // "DicomModalitiesInDatabase" is set to "true", in which case you
     // must use the REST API to define modalities.
     "DicomModalities": {
-        "orthanc": ["GHEALTH", "host.docker.internal", 4244]
+        "orthanc": ["GHEALTH", "host.docker.internal", 4242]
         /**
          * Uncommenting the following line would enable Orthanc to
          * connect to an instance of the "storescp" open-source DICOM
@@ -435,6 +440,7 @@
     // "OrthancPeersInDatabase" is set to "true", in which case you must
     // use the REST API to define Orthanc peers.
     "OrthancPeers": {
+        "target": ["http://localhost:8042", "admin", "password"]
         /**
          * Each line gives the base URL of an Orthanc peer, possibly
          * followed by the username/password pair (if the password
