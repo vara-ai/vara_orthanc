@@ -9,6 +9,7 @@ extern crate tracing;
 pub mod cache;
 pub mod orthanc;
 
+use orthanc::plugin;
 use orthanc::plugin::OrthancPluginContext;
 use orthanc::plugin::OrthancPluginErrorCode;
 use orthanc::plugin::OrthancPluginErrorCode_OrthancPluginErrorCode_Success as OrthancCodeSuccess;
@@ -32,6 +33,12 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
     // Before any of the services provided by Orthanc core (including logging)
     // are used, `orthanc_context` must be initialized.
     orthanc::plugin::info("Initializing Vara Orthanc Worklist plugin.");
+
+    if !plugin::get_plugin_enabled() {
+        orthanc::plugin::info("Vara Orthanc Worklist disabled.");
+        return 0;
+    }
+
     register_on_worklist_callback(Some(on_worklist_callback));
     register_on_change_callback(Some(on_change));
     // Spin off a thread for creating jobs to synchronize existing studies.
