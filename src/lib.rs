@@ -135,12 +135,23 @@ fn orthanc_modality_worklist(endpoint: &str) -> Result<JsonValue, Box<dyn std::e
         .post(endpoint)
         .body(
             r#"{"Short": true,
-                  "Query": {"AccessionNumber": "*",
-                            "RequestedProcedureID": null,
-                            "ScheduledProcedureStepSequence": [],
-                            "PatientName": null,
-                            "StudyID": null,
-                            "StudyInstanceUID": null}}"#,
+                "Query": {"AccessionNumber": "*",
+                          "StudyID": null,
+                          "StudyInstanceUID": null,
+                          "StudyDescription": null,
+
+                          "ReferringPhysicianName": null,
+                          "ReferringPhysician": null,
+
+                          "PatientID": null,
+                          "PatientName": null,
+                          "PatientBirthDate": null,
+                          "PatientSex": null,
+
+                          "RequestedProcedureID": null,
+                          "RequestedProcedureDescription": null,
+                          "RequestedProcedureCodeSequence": [],
+                          "ScheduledProcedureStepSequence": []}}"#,
         )
         .basic_auth(orthanc_api_user, Some(orthanc_api_password))
         .send();
