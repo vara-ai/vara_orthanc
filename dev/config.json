@@ -313,6 +313,7 @@
      **/
 
     "VaraProxy": {
+        "Enable": true,
         "Peer": "target",
         "PeriodicSyncIntervalSeconds": 10
     },

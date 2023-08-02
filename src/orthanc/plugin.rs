@@ -113,7 +113,17 @@ fn get_orthanc_config(context: *mut _OrthancPluginContext_t) -> json::Value {
     unsafe { (&*context).Free.unwrap()(*params.result as *mut c_void) };
     // If we cannot read config as JSON, it's fine to panic.
     json::from_str(&config_str).unwrap()
+}
+
+pub fn get_plugin_enabled() -> bool {
+    let c = get_config();
+
+    match c["VaraProxy"]["Enable"] {
+        json::Value::Null => false,
+        json::Value::Bool(b) => b,
+        _ => panic!("Non-boolean provided for Enable option in VaraProxy plugin"),
     }
+}
 
 pub fn get_local_endpoint() -> super::Endpoint {
     let c = get_config();
