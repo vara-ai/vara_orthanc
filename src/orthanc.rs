@@ -39,7 +39,7 @@ impl OrthancClient {
     }
 }
 
-pub fn sync_studies() -> Result<()> {
+pub fn sync_instances() -> Result<()> {
     let local_endpoint = plugin::get_local_endpoint();
     let peer_endpoint = plugin::get_peer_endpoint().unwrap();
     plugin::info(&format!(
@@ -59,22 +59,22 @@ pub fn sync_studies() -> Result<()> {
         &peer_endpoint.password,
     );
 
-    let local_studies: HashSet<String> = local_orthanc.get_study_ids()?.into_iter().collect();
-    let peer_studies: HashSet<String> = peer_orthanc.get_study_ids()?.into_iter().collect();
+    let local_instances: HashSet<String> = local_orthanc.get_instance_ids()?.into_iter().collect();
+    let peer_instances: HashSet<String> = peer_orthanc.get_instance_ids()?.into_iter().collect();
 
     // plugin::info(&format!(
     //     "Local: {:?}, Remote: {:?}",
     //     &local_studies, &peer_studies
     // ));
 
-    let missing_studies: Vec<String> = local_studies
+    let missing_instances: Vec<String> = local_instances
         .into_iter()
-        .filter(|local_study_id| !peer_studies.contains(local_study_id))
+        .filter(|local_study_id| !peer_instances.contains(local_study_id))
         .collect();
-    if !missing_studies.is_empty() {
-        plugin::info(&format!("Transferring studies: {:?}", missing_studies));
-        match local_orthanc.transfer_studies(&plugin::get_peer_identifier(), missing_studies) {
-            Ok(_response) => plugin::info(&format!("Successfully transferred studies.")),
+    if !missing_instances.is_empty() {
+        plugin::info(&format!("Transferring instances: {:?}", &missing_instances));
+        match local_orthanc.transfer_instances(&plugin::get_peer_identifier(), missing_instances) {
+            Ok(_response) => plugin::info(&format!("Successfully transferred instances")),
             Err(error) => {
                 plugin::info(&format!("Failed to transfer studies: {:?}", error));
                 return Err(error);

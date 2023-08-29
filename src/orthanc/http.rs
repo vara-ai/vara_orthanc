@@ -40,10 +40,15 @@ impl OrthancClient {
         get_entities(&self.http_client, &url, &self.username, &self.password)
     }
 
-    pub fn transfer_studies(
+    pub fn get_instance_ids(self: &Self) -> Result<Vec<String>> {
+        let url = format!("{}/instances", self.url);
+        get_entities(&self.http_client, &url, &self.username, &self.password)
+    }
+
+    pub fn transfer_entities(
         self: &Self,
         peer_identifier: &str,
-        study_ids: Vec<String>,
+        entity_ids: Vec<String>,
     ) -> Result<()> {
         #[derive(Serialize, Debug)]
         struct PeerStoreRequest {
@@ -55,7 +60,7 @@ impl OrthancClient {
 
         let request = PeerStoreRequest {
             asynchronous: false,
-            resources: study_ids,
+            resources: entity_ids,
         };
 
         let request = self
@@ -70,5 +75,21 @@ impl OrthancClient {
         } else {
             Ok(())
         }
+    }
+
+    pub fn transfer_instances(
+        self: &Self,
+        peer_identifier: &str,
+        instance_ids: Vec<String>,
+    ) -> Result<()> {
+        self.transfer_entities(peer_identifier, instance_ids)
+    }
+
+    pub fn transfer_studies(
+        self: &Self,
+        peer_identifier: &str,
+        study_ids: Vec<String>,
+    ) -> Result<()> {
+        self.transfer_entities(peer_identifier, study_ids)
     }
 }
