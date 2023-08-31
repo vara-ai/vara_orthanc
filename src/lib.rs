@@ -52,7 +52,7 @@ pub extern "C" fn OrthancPluginInitialize(context: *mut OrthancPluginContext) ->
         // "VaraProxy" -> "PeriodicSyncIntervalSeconds". Default: 10 minutes.
         loop {
             orthanc::plugin::info("[Periodic Sync] Begin.");
-            if let Err(error) = orthanc::sync_studies() {
+            if let Err(error) = orthanc::sync_instances() {
                 orthanc::plugin::error(&format!("Periodic sync failed. {:?}", error));
             }
             orthanc::plugin::info("[Periodic Sync] End.");
